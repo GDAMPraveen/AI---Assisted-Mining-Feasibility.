@@ -1,6 +1,8 @@
 # ==================== AI-NIDS STREAMLIT PROJECT ====================
 # Core Framework
 streamlit==1.39.0
+python-dotenv==1.0.1
+httpx==0.27.2
 
 # Data Science
 pandas==2.2.2

@@ -1,29 +1,33 @@
 import streamlit as st
 import pandas as pd
 import joblib
-from groq import Groq
 import os
+from groq import Groq
 
-# ---------------- PAGE CONFIG ----------------
+# =====================================================
+# PAGE CONFIG
+# =====================================================
 st.set_page_config(
     page_title="Mountain Mining Approval System",
     page_icon="⛏️",
     layout="centered"
 )
 
-# ---------------- GROQ CLIENT ----------------
+# =====================================================
+# LOAD GROQ CLIENT (SAFE FOR CLOUD)
+# =====================================================
+@st.cache_resource
 def load_groq_client():
-    api_key = st.sidebar.text_input(
-        "🔑 Groq API Key (optional)",
-        type="password",
-        help="Used for AI explanation & impact analysis"
-    )
-    if api_key:
-        return Groq(api_key=api_key)
-    return None
+    api_key = os.getenv("GROQ_API_KEY")
+    if not api_key:
+        return None
+    return Groq(api_key=api_key)
 
 groq_client = load_groq_client()
 
+# =====================================================
+# GROQ AI EXPLANATION
+# =====================================================
 def groq_explanation(input_df, prediction, client):
     if client is None:
         return None
@@ -31,49 +35,62 @@ def groq_explanation(input_df, prediction, client):
     prompt = f"""
 You are an environmental sustainability expert.
 
-Given the following mining site data:
+Mining site data:
 {input_df.to_dict(orient="records")[0]}
 
-The machine learning model predicted:
+Model decision:
 Mining Allowed = {prediction}
 
-Explain:
-1. Why this decision was made
-2. Environmental risks involved
-3. Long-term consequences if mining is carried out
-4. Sustainability recommendation
-
-Keep explanation concise and professional.
+Explain briefly:
+1. Reason for the decision
+2. Environmental risks
+3. Long-term impacts
+4. Sustainability recommendations
 """
+
     response = client.chat.completions.create(
         model="llama3-70b-8192",
         messages=[{"role": "user", "content": prompt}],
-        temperature=0.4
+        temperature=0.4,
+        max_tokens=500
     )
+
     return response.choices[0].message.content
 
-# ---------------- LOAD MODEL ----------------
+# =====================================================
+# LOAD ML MODEL
+# =====================================================
 @st.cache_resource
 def load_model():
     return joblib.load("best_model.pkl")
 
 model = load_model()
 
-# ---------------- ENCODING MAPS ----------------
+# =====================================================
+# ENCODING MAPS
+# =====================================================
 SEISMIC_MAP = {"I": 1, "II": 2, "III": 3, "IV": 4, "V": 5}
 RISK_MAP = {"Low": 1, "Medium": 2, "High": 3, "Very High": 4}
 
-# ---------------- SESSION STATE ----------------
+# =====================================================
+# SESSION STATE
+# =====================================================
 if "input_data" not in st.session_state:
     st.session_state.input_data = pd.DataFrame()
 
-# ---------------- SIDEBAR ----------------
+# =====================================================
+# SIDEBAR
+# =====================================================
 st.sidebar.title("⛏️ Mining System")
 page = st.sidebar.radio("Navigation", ["Input Details", "CSV Upload", "Result"])
+use_ai = st.sidebar.checkbox("🤖 Enable AI Explanation", value=True)
 
-# ---------------- INPUT PAGE ----------------
+# =====================================================
+# INPUT PAGE
+# =====================================================
 if page == "Input Details":
     st.title("📝 Mining Site Input Details")
+
     with st.form("mining_form"):
         elevation = st.number_input("Elevation (m)", 100, 5000, 1200)
         slope = st.slider("Slope (°)", 0, 60, 20)
@@ -113,36 +130,46 @@ if page == "Input Details":
             "Water_Pollution_Risk": RISK_MAP[water],
             "Air_Pollution_Risk": RISK_MAP[air]
         }])
+
         st.success("✅ Input saved. Go to Result page.")
 
-# ---------------- CSV UPLOAD ----------------
+# =====================================================
+# CSV UPLOAD PAGE
+# =====================================================
 elif page == "CSV Upload":
     st.title("📂 Batch Mining Assessment")
-    file = st.file_uploader("Upload CSV File", type=["csv", "xlsx"])
+
+    file = st.file_uploader("Upload CSV or Excel file", type=["csv", "xlsx"])
+
     if file:
         try:
             df = pd.read_csv(file)
         except:
             df = pd.read_excel(file)
 
-        # Encode categorical columns if needed
-        for col, mapping in [("Seismic_Zone", SEISMIC_MAP),
-                             ("Deforestation_Risk", RISK_MAP),
-                             ("Water_Pollution_Risk", RISK_MAP),
-                             ("Air_Pollution_Risk", RISK_MAP)]:
+        for col, mapping in [
+            ("Seismic_Zone", SEISMIC_MAP),
+            ("Deforestation_Risk", RISK_MAP),
+            ("Water_Pollution_Risk", RISK_MAP),
+            ("Air_Pollution_Risk", RISK_MAP)
+        ]:
             if col in df.columns:
                 df[col] = df[col].map(mapping)
 
         df["Mining_Allowed"] = model.predict(df)
         st.success("✅ Predictions generated")
+
         st.dataframe(df.head())
 
         csv = df.to_csv(index=False).encode("utf-8")
-        st.download_button("Download Results", csv, "mining_results.csv")
+        st.download_button("⬇️ Download Results", csv, "mining_results.csv")
 
-# ---------------- RESULT PAGE ----------------
+# =====================================================
+# RESULT PAGE
+# =====================================================
 elif page == "Result":
     st.title("📊 Mining Approval Result")
+
     if st.session_state.input_data.empty:
         st.warning("Please enter inputs first.")
     else:
@@ -151,27 +178,31 @@ elif page == "Result":
 
         if st.button("Run Mining Model"):
             pred = model.predict(df)[0]
+            allowed = bool(pred == 1 or pred == "Yes")
 
-            # Color-coded result
+            color = "green" if allowed else "red"
+            label = "✅ MINING APPROVED" if allowed else "❌ MINING DENIED"
+
             st.markdown(
-                f"<h2 style='color: {'green' if pred=='Yes' else 'red'};'>"
-                f"{'✅ MINING APPROVED' if pred=='Yes' else '❌ MINING DENIED'}</h2>",
+                f"<h2 style='color:{color};'>{label}</h2>",
                 unsafe_allow_html=True
             )
 
-            # ---------------- AI Explanation ----------------
+            # ---------------- RULE-BASED EXPLANATION ----------------
             st.markdown("### 🧠 Rule-based Explanation")
             reasons = []
+
             if df["Protected_Area"][0] == 1:
-                reasons.append("The region is under protected environmental status.")
+                reasons.append("Site lies in a protected environmental region.")
             if df["Forest_Cover_Percent"][0] > 60:
-                reasons.append("High forest cover increases ecological risk.")
+                reasons.append("High forest cover raises ecological concerns.")
             if df["Seismic_Zone"][0] >= 4:
-                reasons.append("High seismic activity increases disaster risk.")
+                reasons.append("High seismic zone increases disaster risk.")
             if df["Distance_to_River_km"][0] < 1:
-                reasons.append("Proximity to river increases water pollution risk.")
+                reasons.append("Close proximity to river increases pollution risk.")
+
             if not reasons:
-                reasons.append("Environmental and infrastructural risks are within acceptable limits.")
+                reasons.append("Environmental risks are within acceptable limits.")
 
             for r in reasons:
                 st.write("•", r)
@@ -179,13 +210,13 @@ elif page == "Result":
             st.markdown("### 🌱 Environmental Consequences")
             st.write("""
 - Possible deforestation and habitat loss  
-- Increased risk of water and air pollution  
-- Long-term impact on biodiversity and local communities  
+- Increased air and water pollution  
+- Long-term biodiversity degradation  
 """)
 
-            # ---------------- Groq AI Explanation ----------------
-            if groq_client:
-                st.markdown("### 🤖 Groq AI Insight")
-                with st.spinner("Running AI analysis..."):
-                    groq_text = groq_explanation(df, pred, groq_client)
-                    st.write(groq_text)
+            # ---------------- GROQ AI EXPLANATION ----------------
+            if groq_client and use_ai:
+                st.markdown("### 🤖 AI Sustainability Insight")
+                with st.spinner("Analyzing with Groq AI..."):
+                    ai_text = groq_explanation(df, pred, groq_client)
+                    st.write(ai_text)

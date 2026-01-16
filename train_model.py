@@ -22,6 +22,9 @@ y = df['Mining_Allowed']
 # Save feature order (VERY IMPORTANT for Streamlit)
 joblib.dump(X.columns.tolist(), "model_features.pkl")
 
+# Save label encoders for categorical columns
+joblib.dump(label_encoders, "label_encoders.pkl")
+
 # Train-test split
 X_train, X_test, y_train, y_test = train_test_split(
     X, y, test_size=0.2, random_state=42
@@ -43,4 +46,4 @@ print("\nClassification Report:\n", classification_report(y_test, y_pred))
 # Save model
 joblib.dump(model, "best_model.pkl")
 
-print("✅ Model and features saved successfully")
+print("✅ Model, features, and encoders saved successfully")

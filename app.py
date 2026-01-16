@@ -90,7 +90,7 @@ if page == "Single Site Input":
 
     with st.form("mining_form"):
         data = {
-            "Region_ID": "R_NEW",
+            "Region_ID": "R4",
             "State": st.text_input("State", "Karnataka"),
             "Mountain_Range": st.text_input("Mountain Range", "Western Ghats"),
             "Nearby_River": st.text_input("Nearby River", "Sharavathi"),

@@ -21,7 +21,10 @@ def load_model():
     return joblib.load("best_model.pkl")
 
 model = load_model()
+def feature_model():
+    return joblib.load("model_features.pkl")
 
+feature = feature_model()
 # =====================================================
 # GROQ CLIENT (OPTIONAL)
 # =====================================================

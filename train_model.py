@@ -6,7 +6,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, classification_report
 
 # Load dataset
-df = pd.read_csv("Mountain_Mining.csv")
+df = pd.read_csv("/content/Mountain_Mining.csv")
 
 # Encode categorical columns
 label_encoders = {}

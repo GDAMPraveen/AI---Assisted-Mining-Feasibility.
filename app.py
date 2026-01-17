@@ -36,7 +36,59 @@ def load_groq_client():
     return Groq(api_key=api_key)
 
 groq_client = load_groq_client()
+# =====================================================
+# GROQ AI EXPLANATION
+# =====================================================
+def groq_explanation(df, decision, reasons=None):
+    if groq_client is None:
+        return "Groq AI not enabled."
 
+    site_data = df.to_dict(orient="records")[0]
+
+    if decision == "DENIED":
+        prompt = f"""
+You are an environmental clearance officer.
+
+Mining site details:
+{site_data}
+
+Final decision: MINING DENIED
+
+Reasons:
+{reasons}
+
+Explain clearly:
+1. Why mining cannot be approved
+2. Environmental and legal violations
+3. Long-term ecological risks
+4. Impact on wildlife, water, and population
+5. Suggest safer alternatives
+"""
+    else:
+        prompt = f"""
+You are an environmental clearance officer.
+
+Mining site details:
+{site_data}
+
+Final decision: MINING APPROVED
+
+Explain clearly:
+1. Why mining is permitted
+2. Environmental conditions satisfied
+3. Risk mitigation measures
+4. Legal compliance justification
+5. Sustainability safeguards required
+"""
+
+    response = groq_client.chat.completions.create(
+        model="llama3-70b-8192",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.3,
+        max_tokens=450
+    )
+
+    return response.choices[0].message.content
 # =====================================================
 # PREPROCESS INPUT (NO ERRORS)
 # =====================================================
@@ -57,71 +109,68 @@ def preprocess_input(df):
 # =====================================================
 # RULE-BASED DENIAL (ENVIRONMENTAL LAW)
 # =====================================================
-def rule_based_denial(df):
-    reasons = []
+if st.button("Run Prediction"):
+    denial_reasons = rule_based_denial(df)
 
-    if df["Protected_Area"][0] == 1:
-        reasons.append("Site lies in a protected area")
+    # ---------------- DENIED ----------------
+    if denial_reasons:
+        st.markdown(
+            "<h2 style='color:red'>❌ MINING DENIED</h2>",
+            unsafe_allow_html=True
+        )
 
-    if df["Restriction_Type"][0] in [
-        "Wildlife Sanctuary",
-        "National Park",
-        "Biosphere Reserve"
-    ]:
-        reasons.append("Restricted ecological zone")
+        st.markdown("### ❗ Reasons for Denial")
+        for r in denial_reasons:
+            st.write(f"• {r}")
 
-    if df["Forest_Cover_Percent"][0] > 60:
-        reasons.append("High forest cover (>60%)")
+        if groq_client and use_ai:
+            st.markdown("### 🤖 AI Justification (Groq)")
+            with st.spinner("Generating expert explanation..."):
+                explanation = groq_explanation(
+                    df,
+                    decision="DENIED",
+                    reasons=denial_reasons
+                )
+                st.write(explanation)
 
-    if df["Water_Pollution_Risk"][0] in ["High", "Very High"]:
-        reasons.append("High water pollution risk")
+    # ---------------- APPROVED ----------------
+    else:
+        pred = model.predict(df_proc)[0]
 
-    if df["Air_Pollution_Risk"][0] in ["High", "Very High"]:
-        reasons.append("High air pollution risk")
+        if pred == 1:
+            st.markdown(
+                "<h2 style='color:green'>✅ MINING APPROVED</h2>",
+                unsafe_allow_html=True
+            )
 
-    if df["Seismic_Zone"][0] in ["IV", "V"]:
-        reasons.append("High seismic risk zone")
+            st.markdown("### ✅ Approval Basis")
+            st.write("• No critical environmental or legal violations detected")
+            st.write("• Risks are within permissible limits")
+            st.write("• Location satisfies regulatory thresholds")
 
-    if df["Distance_to_River_km"][0] < 3:
-        reasons.append("Too close to river (<3 km)")
+            if groq_client and use_ai:
+                st.markdown("### 🤖 AI Justification (Groq)")
+                with st.spinner("Generating expert explanation..."):
+                    explanation = groq_explanation(
+                        df,
+                        decision="APPROVED"
+                    )
+                    st.write(explanation)
 
-    return reasons
+        else:
+            st.markdown(
+                "<h2 style='color:red'>❌ MINING DENIED (ML Risk)</h2>",
+                unsafe_allow_html=True
+            )
 
-# =====================================================
-# GROQ AI EXPLANATION
-# =====================================================
-def groq_explanation(df, denied_reasons):
-    if groq_client is None:
-        return None
-
-    prompt = f"""
-You are an environmental sustainability expert.
-
-Mining site data:
-{df.to_dict(orient="records")[0]}
-
-Final decision:
-Mining DENIED
-
-Reasons:
-{denied_reasons}
-
-Explain:
-1. Why mining was denied
-2. Environmental risks involved
-3. Long-term consequences
-4. Sustainable alternatives
-"""
-
-    response = groq_client.chat.completions.create(
-        model="llama3-70b-8192",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.4,
-        max_tokens=400
-    )
-
-    return response.choices[0].message.content
-
+            if groq_client and use_ai:
+                st.markdown("### 🤖 AI Risk Explanation (Groq)")
+                explanation = groq_explanation(
+                    df,
+                    decision="DENIED",
+                    reasons=["High predicted environmental risk by ML model"]
+                )
+                st.write(explanation)
 # =====================================================
 # SESSION STATE
 # =====================================================

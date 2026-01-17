@@ -57,6 +57,58 @@ def preprocess_input(df):
 # =====================================================
 # RULE-BASED DENIAL (ENVIRONMENTAL LAW)
 # =====================================================
+# =====================================================
+# RULE-BASED DENIAL LOGIC (Legal + Environmental)
+# =====================================================
+def rule_based_denial(df):
+    reasons = []
+
+    row = df.iloc[0]
+
+    # ---- LEGAL PROTECTIONS ----
+    if row["Protected_Area"] == 1:
+        reasons.append("Mining in protected areas is legally restricted.")
+
+    if row["Restriction_Type"] in [
+        "Wildlife Sanctuary",
+        "National Park",
+        "Biosphere Reserve"
+    ]:
+        reasons.append(
+            f"Area falls under {row['Restriction_Type']} protection laws."
+        )
+
+    # ---- ENVIRONMENTAL THRESHOLDS ----
+    if row["Forest_Cover_Percent"] > 60:
+        reasons.append("High forest cover indicates severe ecological impact.")
+
+    if row["Distance_to_River_km"] < 3:
+        reasons.append("Proximity to river increases water pollution risk.")
+
+    if row["Deforestation_Risk"] in ["High", "Very High"]:
+        reasons.append("High deforestation risk detected.")
+
+    if row["Water_Pollution_Risk"] in ["High", "Very High"]:
+        reasons.append("High water pollution risk detected.")
+
+    if row["Air_Pollution_Risk"] in ["High", "Very High"]:
+        reasons.append("High air pollution risk detected.")
+
+    # ---- GEOLOGICAL RISK ----
+    if row["Seismic_Zone"] in ["IV", "V"]:
+        reasons.append("Location lies in a high seismic risk zone.")
+
+    if row["Slope_deg"] > 30:
+        reasons.append("Steep terrain increases landslide risk.")
+
+    # ---- SOCIAL IMPACT ----
+    if row["Population_Density_per_km2"] > 1000:
+        reasons.append("High population density increases social risk.")
+
+    if row["Past_Mining_Accidents"] > 5:
+        reasons.append("History of frequent mining accidents in this region.")
+
+    return reasons
 if st.button("Run Prediction"):
     denial_reasons = rule_based_denial(df)
 

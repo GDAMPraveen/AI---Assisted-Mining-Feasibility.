@@ -1,5 +1,12 @@
+# -*- coding: utf-8 -*-
+"""
+AI-Assisted Mining Feasibility System – 2025
+Policy + Environmental + AI Justification
+"""
+
 import streamlit as st
 import pandas as pd
+import numpy as np
 import joblib
 import os
 from groq import Groq
@@ -8,271 +15,149 @@ from groq import Groq
 # PAGE CONFIG
 # =====================================================
 st.set_page_config(
-    page_title="AI-Assisted Mining Feasibility System",
+    page_title="AI Mining Assessment 2025",
     page_icon="⛏️",
     layout="centered"
 )
 
 # =====================================================
-# LOAD MODEL + FEATURES + ENCODERS
+# LOAD TRAINED ASSETS
 # =====================================================
 @st.cache_resource
-def load_model():
+def load_assets():
     model = joblib.load("best_model.pkl")
-    features = joblib.load("model_features.pkl")
-    encoders = joblib.load("label_encoders.pkl")
-    return model, features, encoders
+    scaler = joblib.load("scaler.pkl")
+    features = joblib.load("feature_list.pkl")
+    return model, scaler, features
 
-model, FEATURES, LABEL_ENCODERS = load_model()
+model, scaler, FEATURES = load_assets()
 
 # =====================================================
-# GROQ CLIENT (OPTIONAL)
+# GROQ CLIENT
 # =====================================================
 @st.cache_resource
-def load_groq_client():
-    api_key = os.getenv("GROQ_API_KEY")
-    if not api_key:
+def load_groq():
+    key = os.getenv("GROQ_API_KEY")
+    if not key:
         return None
-    return Groq(api_key=api_key)
+    return Groq(api_key=key)
 
-groq_client = load_groq_client()
-
-# =====================================================
-# PREPROCESS INPUT (NO ERRORS)
-# =====================================================
-def preprocess_input(df):
-    df = df.copy()
-
-    for col, le in LABEL_ENCODERS.items():
-        if col in df.columns:
-            df[col] = df[col].astype(str)
-            df[col] = df[col].apply(
-                lambda x: x if x in le.classes_ else le.classes_[0]
-            )
-            df[col] = le.transform(df[col])
-
-    df = df[FEATURES]
-    return df
+groq = load_groq()
 
 # =====================================================
-# RULE-BASED DENIAL (ENVIRONMENTAL LAW)
+# RISK + DECISION LOGIC (UNCHANGED)
 # =====================================================
-def rule_based_denial(df):
-    reasons = []
+risk_mapping = {'Low': 2, 'Medium': 5, 'High': 8, 'Very High': 10}
+seismic_mapping = {'I': 1, 'II': 2, 'III': 3, 'IV': 4, 'V': 5}
 
-    if df["Protected_Area"][0] == 1:
-        reasons.append("Site lies in a protected area")
+def to_binary(v):
+    return 1 if str(v).lower() in ['1','yes','true'] else 0
 
-    if df["Restriction_Type"][0] in [
-        "Wildlife Sanctuary",
-        "National Park",
-        "Biosphere Reserve"
-    ]:
-        reasons.append("Restricted ecological zone")
+def evaluate_and_impact(row):
+    reasons, impacts = [], []
 
-    if df["Forest_Cover_Percent"][0] > 60:
-        reasons.append("High forest cover (>60%)")
+    legal_flag = row["Protected_Area"] == 1
+    risk_flag = row["Environmental_Risk_Index"] > 0.65
+    safety_flag = row["Slope_deg"] > 35 and row["Seismic_Zone"] >= 4
+    policy_flag = row["AI_Predicted_Allowed"] == 0
 
-    if df["Water_Pollution_Risk"][0] in ["High", "Very High"]:
-        reasons.append("High water pollution risk")
+    if legal_flag:
+        reasons.append("Inviolate protected / sanctuary zone.")
+        impacts.append("Permanent biodiversity loss.")
 
-    if df["Air_Pollution_Risk"][0] in ["High", "Very High"]:
-        reasons.append("High air pollution risk")
+    if risk_flag:
+        reasons.append("Environmental risk index exceeds 0.65.")
+        impacts.append("Water, forest, and soil degradation likely.")
 
-    if df["Seismic_Zone"][0] in ["IV", "V"]:
-        reasons.append("High seismic risk zone")
+    if safety_flag:
+        reasons.append("High landslide risk due to slope & seismicity.")
+        impacts.append("Threat to nearby human settlements.")
 
-    if df["Distance_to_River_km"][0] < 3:
-        reasons.append("Too close to river (<3 km)")
+    if policy_flag:
+        reasons.append("AI sustainability policy violation.")
+        impacts.append("Conflicts with national environmental planning.")
 
-    return reasons
+    if legal_flag:
+        status = "DENIED (Legal)"
+    elif risk_flag:
+        status = "REJECTED (High Risk)"
+    elif safety_flag:
+        status = "REJECTED (Safety)"
+    elif policy_flag:
+        status = "DENIED (Policy)"
+    else:
+        status = "APPROVED"
+        reasons.append("All regulatory thresholds satisfied.")
+        impacts.append("Mitigation plans mandatory.")
+
+    return status, "; ".join(reasons), "; ".join(impacts)
 
 # =====================================================
-# GROQ AI EXPLANATION
+# UI – INPUT
 # =====================================================
-def groq_explanation(df, denied_reasons):
-    if groq_client is None:
-        return None
+st.title("⛏️ Mining Feasibility Assessment")
 
-    prompt = f"""
-You are an environmental sustainability expert.
+data = {
+    "Elevation_m": st.number_input("Elevation (m)", 50, 5000, 600),
+    "Slope_deg": st.slider("Slope (°)", 0, 60, 38),
+    "Forest_Cover_Percent": st.slider("Forest Cover (%)", 0, 100, 72),
+    "Protected_Area": st.selectbox("Protected Area", [0, 1]),
+    "Annual_Rainfall_mm": st.number_input("Rainfall (mm)", 500, 5000, 2800),
+    "Seismic_Zone": seismic_mapping[
+        st.selectbox("Seismic Zone", ["I","II","III","IV","V"])
+    ],
+    "Population_Density_per_km2": st.number_input("Population Density", 10, 5000, 1400),
+    "Distance_to_River_km": st.number_input("Distance to River (km)", 0.1, 50.0, 1.8),
+    "Distance_to_Road_km": st.number_input("Distance to Road (km)", 0.1, 100.0, 5.0),
+    "NDVI": st.slider("NDVI", 0.0, 1.0, 0.42),
 
-Mining site data:
-{df.to_dict(orient="records")[0]}
+    "Deforestation_Risk": risk_mapping[
+        st.selectbox("Deforestation Risk", risk_mapping.keys())
+    ],
+    "Water_Pollution_Risk": risk_mapping[
+        st.selectbox("Water Pollution Risk", risk_mapping.keys())
+    ],
+    "Air_Pollution_Risk": risk_mapping[
+        st.selectbox("Air Pollution Risk", risk_mapping.keys())
+    ],
+}
 
-Final decision:
-Mining DENIED
+# =====================================================
+# RUN ASSESSMENT
+# =====================================================
+if st.button("Run Assessment"):
+    df = pd.DataFrame([data])
 
-Reasons:
-{denied_reasons}
-
-Explain:
-1. Why mining was denied
-2. Environmental risks involved
-3. Long-term consequences
-4. Sustainable alternatives
-"""
-
-    response = groq_client.chat.completions.create(
-        model="llama3-70b-8192",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.4,
-        max_tokens=400
+    df["Environmental_Risk_Index"] = (
+        df[["Deforestation_Risk","Water_Pollution_Risk","Air_Pollution_Risk"]]
+        .mean(axis=1) / 10
     )
 
-    return response.choices[0].message.content
+    X = scaler.transform(df[FEATURES])
+    df["AI_Predicted_Allowed"] = model.predict(X)
 
-# =====================================================
-# SESSION STATE
-# =====================================================
-if "input_df" not in st.session_state:
-    st.session_state.input_df = None
+    status, justification, impacts = evaluate_and_impact(df.iloc[0])
 
-# =====================================================
-# SIDEBAR
-# =====================================================
-st.sidebar.title("⛏️ Navigation")
-page = st.sidebar.radio(
-    "Select Page",
-    ["Single Site Input", "CSV Upload", "Result"]
-)
-use_ai = st.sidebar.checkbox("🤖 Enable AI Explanation", value=True)
+    st.subheader(f"📌 Final Decision: {status}")
+    st.write("### 🧾 Justification")
+    st.write(justification)
+    st.write("### 🌍 Environmental Impact")
+    st.write(impacts)
 
-# =====================================================
-# PAGE: SINGLE SITE INPUT
-# =====================================================
-if page == "Single Site Input":
-    st.title("📝 Mining Site Details")
+    if groq:
+        st.subheader("🤖 Groq AI Expert Opinion")
+        st.write(
+            groq.chat.completions.create(
+                model="llama3-70b-8192",
+                messages=[{
+                    "role": "user",
+                    "content": f"""
+Decision: {status}
+Justification: {justification}
+Impacts: {impacts}
 
-    with st.form("mining_form"):
-        data = {
-            "Region_ID": "R_NEW",
-            "State": st.text_input("State", "Karnataka"),
-            "Mountain_Range": st.text_input("Mountain Range", "Western Ghats"),
-            "Nearby_River": st.text_input("Nearby River", "Sharavathi"),
-            "Wildlife_Sanctuary": st.selectbox(
-                "Wildlife Sanctuary",
-                [
-                    "Dandeli Wildlife Sanctuary",
-                    "Achanakmar Wildlife Sanctuary",
-                    "Similipal Wildlife Sanctuary",
-                    "Kawal Wildlife Sanctuary",
-                    "Kaziranga Wildlife Sanctuary"
-                ]
-            ),
-            "Restriction_Type": st.selectbox(
-                "Restriction Type",
-                ["None", "Wildlife Sanctuary", "National Park", "Biosphere Reserve"]
-            ),
-            "Dominant_Trees": st.text_input("Dominant Trees", "Teak"),
-            "Key_Animals": st.text_input("Key Animals", "Deer"),
-            "Minerals_Present": st.text_input("Minerals Present", "Iron Ore"),
-
-            "Elevation_m": st.number_input("Elevation (m)", 50, 5000, 500),
-            "Slope_deg": st.slider("Slope (°)", 0, 60, 15),
-            "NDVI": st.slider("NDVI", 0.0, 1.0, 0.45),
-            "Forest_Cover_Percent": st.slider("Forest Cover (%)", 0, 100, 70),
-            "Distance_to_River_km": st.number_input("Distance to River (km)", 0.0, 50.0, 2.0),
-            "Protected_Area": st.selectbox("Protected Area", [0, 1]),
-            "Existing_Mining": st.selectbox("Existing Mining", [0, 1]),
-
-            "Deforestation_Risk": st.selectbox(
-                "Deforestation Risk", ["Low", "Medium", "High", "Very High"]
-            ),
-            "Water_Pollution_Risk": st.selectbox(
-                "Water Pollution Risk", ["Low", "Medium", "High", "Very High"]
-            ),
-            "Air_Pollution_Risk": st.selectbox(
-                "Air Pollution Risk", ["Low", "Medium", "High", "Very High"]
-            ),
-
-            "Annual_Rainfall_mm": st.number_input("Annual Rainfall (mm)", 200, 5000, 2500),
-            "Seasonal_Rainfall_Variability": st.slider("Rainfall Variability", 0.0, 2.0, 1.2),
-            "Avg_Temperature_C": st.slider("Avg Temperature (°C)", 5, 40, 28),
-            "Max_Temperature_C": st.slider("Max Temperature (°C)", 10, 50, 38),
-            "Min_Temperature_C": st.slider("Min Temperature (°C)", 0, 30, 18),
-
-            "Seismic_Zone": st.selectbox("Seismic Zone", ["I", "II", "III", "IV", "V"]),
-            "Population_Density_per_km2": st.number_input("Population Density", 1, 5000, 900),
-            "Land_Use_Type": st.selectbox(
-                "Land Use Type", ["Forest", "Agriculture", "Urban", "Mining"]
-            ),
-            "Mining_Employment_Dependency_%": st.slider(
-                "Mining Employment Dependency (%)", 0, 100, 30
-            ),
-            "Past_Mining_Accidents": st.number_input("Past Mining Accidents", 0, 20, 2),
-            "Previous_Hazard_Report": st.selectbox(
-                "Previous Hazard Report", ["Low", "Medium", "High"]
-            ),
-
-            "Distance_to_Road_km": st.number_input("Distance to Road (km)", 0.0, 100.0, 6.0),
-            "Distance_to_Rail_km": st.number_input("Distance to Rail (km)", 0.0, 200.0, 30.0),
-            "Distance_to_Town_km": st.number_input("Distance to Town (km)", 0.0, 200.0, 40.0),
-            "Road_Connectivity": st.selectbox("Road Connectivity", ["Poor", "Moderate", "Good"]),
-            "Rail_Connectivity": st.selectbox(
-                "Rail Connectivity", ["None", "Low", "Moderate", "High"]
-            )
-        }
-
-        submit = st.form_submit_button("Save Input")
-
-    if submit:
-        st.session_state.input_df = pd.DataFrame([data])
-        st.success("✅ Data saved. Go to Result page.")
-
-# =====================================================
-# PAGE: CSV UPLOAD
-# =====================================================
-elif page == "CSV Upload":
-    st.title("📂 Batch Mining Assessment")
-
-    file = st.file_uploader("Upload CSV file", type=["csv"])
-    if file:
-        df = pd.read_csv(file)
-        df_proc = preprocess_input(df)
-
-        preds = model.predict(df_proc)
-        df["Mining_Allowed_Prediction"] = ["Yes" if p == 1 else "No" for p in preds]
-
-        st.dataframe(df.head())
-        st.download_button(
-            "⬇️ Download Results",
-            df.to_csv(index=False).encode("utf-8"),
-            "mining_predictions.csv"
+Explain scientifically and legally.
+"""
+                }]
+            ).choices[0].message.content
         )
-
-# =====================================================
-# PAGE: RESULT
-# =====================================================
-elif page == "Result":
-    st.title("📊 Mining Approval Result")
-
-    if st.session_state.input_df is None:
-        st.warning("Please enter site details first.")
-    else:
-        df = st.session_state.input_df
-        df_proc = preprocess_input(df)
-
-        if st.button("Run Prediction"):
-            denial_reasons = rule_based_denial(df)
-
-            if denial_reasons:
-                st.markdown(
-                    "<h2 style='color:red'>❌ MINING DENIED</h2>",
-                    unsafe_allow_html=True
-                )
-                st.markdown("### ❗ Reasons for Denial")
-                for r in denial_reasons:
-                    st.write(f"• {r}")
-
-                if groq_client and use_ai:
-                    st.markdown("### 🤖 AI Sustainability Insight")
-                    with st.spinner("Analyzing..."):
-                        st.write(groq_explanation(df, denial_reasons))
-
-            else:
-                pred = model.predict(df_proc)[0]
-                st.markdown(
-                    "<h2 style='color:green'>✅ MINING APPROVED</h2>",
-                    unsafe_allow_html=True
-                )

@@ -36,59 +36,7 @@ def load_groq_client():
     return Groq(api_key=api_key)
 
 groq_client = load_groq_client()
-# =====================================================
-# GROQ AI EXPLANATION
-# =====================================================
-def groq_explanation(df, decision, reasons=None):
-    if groq_client is None:
-        return "Groq AI not enabled."
 
-    site_data = df.to_dict(orient="records")[0]
-
-    if decision == "DENIED":
-        prompt = f"""
-You are an environmental clearance officer.
-
-Mining site details:
-{site_data}
-
-Final decision: MINING DENIED
-
-Reasons:
-{reasons}
-
-Explain clearly:
-1. Why mining cannot be approved
-2. Environmental and legal violations
-3. Long-term ecological risks
-4. Impact on wildlife, water, and population
-5. Suggest safer alternatives
-"""
-    else:
-        prompt = f"""
-You are an environmental clearance officer.
-
-Mining site details:
-{site_data}
-
-Final decision: MINING APPROVED
-
-Explain clearly:
-1. Why mining is permitted
-2. Environmental conditions satisfied
-3. Risk mitigation measures
-4. Legal compliance justification
-5. Sustainability safeguards required
-"""
-
-    response = groq_client.chat.completions.create(
-        model="llama3-70b-8192",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.3,
-        max_tokens=450
-    )
-
-    return response.choices[0].message.content
 # =====================================================
 # PREPROCESS INPUT (NO ERRORS)
 # =====================================================
@@ -171,6 +119,59 @@ if st.button("Run Prediction"):
                     reasons=["High predicted environmental risk by ML model"]
                 )
                 st.write(explanation)
+# =====================================================
+# GROQ AI EXPLANATION
+# =====================================================
+def groq_explanation(df, decision, reasons=None):
+    if groq_client is None:
+        return "Groq AI not enabled."
+
+    site_data = df.to_dict(orient="records")[0]
+
+    if decision == "DENIED":
+        prompt = f"""
+You are an environmental clearance officer.
+
+Mining site details:
+{site_data}
+
+Final decision: MINING DENIED
+
+Reasons:
+{reasons}
+
+Explain clearly:
+1. Why mining cannot be approved
+2. Environmental and legal violations
+3. Long-term ecological risks
+4. Impact on wildlife, water, and population
+5. Suggest safer alternatives
+"""
+    else:
+        prompt = f"""
+You are an environmental clearance officer.
+
+Mining site details:
+{site_data}
+
+Final decision: MINING APPROVED
+
+Explain clearly:
+1. Why mining is permitted
+2. Environmental conditions satisfied
+3. Risk mitigation measures
+4. Legal compliance justification
+5. Sustainability safeguards required
+"""
+
+    response = groq_client.chat.completions.create(
+        model="llama3-70b-8192",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.3,
+        max_tokens=450
+    )
+
+    return response.choices[0].message.content
 # =====================================================
 # SESSION STATE
 # =====================================================
